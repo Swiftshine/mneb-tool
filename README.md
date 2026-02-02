@@ -1,5 +1,5 @@
 # mneb-tool
-A tool to animate or convert MNEB files.
+A tool to animate or convert MNEB files. Documentation on the format can be found [here](https://swiftshine.github.io/doc/key/mneb.html).
 
 ## Usage
 ### Animation
