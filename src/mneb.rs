@@ -26,7 +26,7 @@ impl ControlPoint {
 pub struct KeyFrame {
     pub frame: u16,
     pub is_active: bool,
-    pub x: i16,
+    pub x: i16, // these are positions, not offsets
     pub y: i16,
 }
 
@@ -101,7 +101,7 @@ pub struct DemoOptionSet {
     pub demo_options: Vec<DemoOption>,
 
     /* unknown fields */
-    pub unk_20: [u8; 0x20],
+    pub _unk_20: [u8; 0x20],
 }
 
 #[derive(Default, Debug)]
@@ -111,15 +111,15 @@ pub struct MNEBFile {
     pub frame_count: u16,
 
     /* unknown fields */
-    pub unk_8: u32,
-    pub unk_10: u32,
-    pub unk_16: bool,
+    pub _unk_8: u32,
+    pub _unk_10: u32,
+    pub _unk_16: bool,
 }
 
 impl MNEBFile {
-    // pub fn has_curves(&self) -> bool {
-    //     !self.curves.is_empty()
-    // }
+    pub fn has_curves(&self) -> bool {
+        !self.curves.is_empty()
+    }
 
     pub fn from_bytes(raw: &[u8]) -> Result<Self, anyhow::Error> {
         let mut c = Cursor::new(raw);
@@ -266,9 +266,9 @@ impl MNEBFile {
             curves,
             demo_option_sets,
             frame_count,
-            unk_8,
-            unk_10,
-            unk_16,
+            _unk_8: unk_8,
+            _unk_10: unk_10,
+            _unk_16: unk_16,
         })
     }
 }

@@ -1,20 +1,21 @@
+mod graph;
 mod mneb;
 use anyhow::Result;
-// use clap::{Parser, ValueEnum};
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use std::fs;
 
-// #[derive(Clone, Debug, ValueEnum)]
-// enum Usage {
-//     Graph,
-//     Convert,
-// }
+#[derive(Clone, Debug, ValueEnum)]
+enum Usage {
+    Graph,
+    // Convert,
+}
 
 #[derive(Parser, Debug)]
 struct Args {
-    // usage: Usage,
+    usage: Usage,
     mneb_file: String,
     output_json: Option<String>,
+    framerate: Option<f32>,
 }
 
 fn main() -> Result<()> {
@@ -22,6 +23,18 @@ fn main() -> Result<()> {
 
     let file = fs::read(args.mneb_file)?;
     let mneb_file = mneb::MNEBFile::from_bytes(&file)?;
-    println!("{:#?}", mneb_file);
+
+    match args.usage {
+        Usage::Graph => {
+            if mneb_file.has_curves() {
+                let framerate = args.framerate.unwrap_or_else(|| 60.0f32);
+                graph::do_graph(mneb_file, framerate);
+            } else {
+                // nothing to do
+                println!("File does not have curves to render.");
+            }
+        }
+    }
+
     Ok(())
 }
