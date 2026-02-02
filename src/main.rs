@@ -16,7 +16,7 @@ enum Usage {
         #[arg(default_value_t = String::from("out.json"))]
         output_json: String,
         /// Make the JSON output pretty.
-        #[arg(short, long, default_value_t = false)]
+        #[arg(short, long)]
         pretty: bool,
     },
 }
