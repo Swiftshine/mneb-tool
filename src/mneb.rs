@@ -1,9 +1,9 @@
 use anyhow::{Result, ensure};
 use byteorder::{BigEndian, ReadBytesExt};
-use derivative::{self, Derivative};
+use serde::Serialize;
 use std::io::{Cursor, Seek};
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Serialize)]
 pub struct ControlPoint {
     pub x: i16,
     pub y: i16,
@@ -22,7 +22,7 @@ impl ControlPoint {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Serialize)]
 pub struct KeyFrame {
     pub frame: u16,
     pub is_active: bool,
@@ -47,7 +47,7 @@ impl KeyFrame {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Serialize)]
 pub struct KeyFrameSet {
     pub node_index: u16,
     pub key_frames: Vec<KeyFrame>,
@@ -71,8 +71,7 @@ impl KeyFrameSet {
     }
 }
 
-#[derive(Derivative)]
-#[derivative(Default, Debug)]
+#[derive(Debug, Serialize)]
 pub struct Curve {
     pub name: String,
     pub control_points: Vec<ControlPoint>,
@@ -80,22 +79,43 @@ pub struct Curve {
     pub key_frame_sets: Vec<KeyFrameSet>,
 
     /* unknown fields */
-    #[derivative(Default(value = "[0u8; 0x64]"))]
+    #[serde(serialize_with = "<[_]>::serialize")]
     pub unk_28: [u8; 0x64],
     pub unk_8c: f32,
     pub unk_90: u32,
     pub unk_94: u32,
     pub unk_98: u32,
-    pub unk_a8: [f32; 4], // pub unk_b8:
+    pub unk_a8: [f32; 4],
+    pub unk_b8: Vec<u8>,
 }
 
-#[derive(Default, Debug)]
+impl Default for Curve {
+    // necessary because we can't derive Default for arrays with a length greather than 32
+    // ...which means we can't use ..Default::default either due to recursion
+    fn default() -> Curve {
+        Curve {
+            name: String::new(),
+            control_points: Vec::new(),
+            knots: Vec::new(),
+            key_frame_sets: Vec::new(),
+            unk_28: [0u8; 0x64],
+            unk_8c: 0.0f32,
+            unk_90: 0,
+            unk_94: 0,
+            unk_98: 0,
+            unk_a8: [0.0f32; 4],
+            unk_b8: Vec::new(),
+        }
+    }
+}
+
+#[derive(Default, Debug, Serialize)]
 pub struct DemoOption {
     pub name: String,
     pub value: String,
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Serialize)]
 pub struct DemoOptionSet {
     pub name: String,
     pub demo_options: Vec<DemoOption>,
@@ -104,7 +124,7 @@ pub struct DemoOptionSet {
     pub unk_20: [u8; 0x20],
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Serialize)]
 pub struct MNEBFile {
     pub curves: Vec<Curve>,
     pub demo_option_sets: Vec<DemoOptionSet>,
@@ -272,8 +292,16 @@ impl MNEBFile {
                     temp
                 };
 
-                // read control points
+                // read any extra data
+                let mut unk_b8 =
+                    Vec::with_capacity((control_point_table_offset as u64 - c.position()) as usize);
+                {
+                    let pos = c.position() as usize;
+                    let raw = c.get_ref();
+                    unk_b8.extend_from_slice(&raw[pos..pos + unk_b8.capacity()])
+                }
 
+                // read control points
                 c.set_position(control_point_table_offset as u64);
                 let num_control_points = c.read_u32::<BigEndian>()?;
                 let mut control_points: Vec<ControlPoint> =
@@ -324,6 +352,7 @@ impl MNEBFile {
                     unk_94,
                     unk_98,
                     unk_a8,
+                    unk_b8,
                 };
 
                 curves.push(curve);
@@ -331,8 +360,6 @@ impl MNEBFile {
                 // go to next curve block
                 c.set_position(offset_to_next as u64);
             }
-
-            // todo!()
         }
 
         Ok(Self {
