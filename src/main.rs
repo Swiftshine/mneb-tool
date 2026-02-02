@@ -1,4 +1,4 @@
-mod graph;
+mod animate;
 mod mneb;
 use anyhow::Result;
 use clap::{Parser, ValueEnum};
@@ -6,7 +6,7 @@ use std::fs;
 
 #[derive(Clone, Debug, ValueEnum)]
 enum Usage {
-    Graph,
+    Animate,
     // Convert,
 }
 
@@ -25,10 +25,10 @@ fn main() -> Result<()> {
     let mneb_file = mneb::MNEBFile::from_bytes(&file)?;
 
     match args.usage {
-        Usage::Graph => {
+        Usage::Animate => {
             if mneb_file.has_curves() {
                 let framerate = args.framerate.unwrap_or_else(|| 60.0f32);
-                graph::do_graph(mneb_file, framerate);
+                animate::play_animation(mneb_file, framerate);
             } else {
                 // nothing to do
                 println!("File does not have curves to render.");
