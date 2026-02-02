@@ -92,7 +92,7 @@ pub struct Curve {
 #[derive(Default, Debug)]
 pub struct DemoOption {
     pub name: String,
-    pub values: Vec<u8>,
+    pub value: String,
 }
 
 #[derive(Default, Debug)]
@@ -199,12 +199,12 @@ impl MNEBFile {
                     };
 
                     let num_values = c.read_u32::<BigEndian>()?;
-                    let mut values: Vec<u8> = Vec::with_capacity(num_values as usize);
+                    let mut raw_string_bytes: Vec<u8> = Vec::with_capacity(num_values as usize);
                     let pos = c.position() as usize;
                     let raw = c.get_ref();
-                    values.extend_from_slice(&raw[pos..pos + num_values as usize]);
-
-                    demo_options.push(DemoOption { name, values });
+                    raw_string_bytes.extend_from_slice(&raw[pos..pos + num_values as usize]);
+                    let value = String::from_utf8(raw_string_bytes)?;
+                    demo_options.push(DemoOption { name, value });
                     c.set_position(cur_pos + 4);
                 }
 
