@@ -1,5 +1,5 @@
 use anyhow::{Result, ensure};
-use byteorder::{BigEndian, ByteOrder, ReadBytesExt};
+use byteorder::{BigEndian, ReadBytesExt};
 use derivative::{self, Derivative};
 use std::io::{Cursor, Seek};
 
@@ -11,6 +11,17 @@ pub struct ControlPoint {
     pub w: i16,
 }
 
+impl ControlPoint {
+    fn from_bytes(cursor: &mut Cursor<&[u8]>) -> Result<Self> {
+        let x = cursor.read_i16::<BigEndian>()?;
+        let y = cursor.read_i16::<BigEndian>()?;
+        let z = cursor.read_i16::<BigEndian>()?;
+        let w = cursor.read_i16::<BigEndian>()?;
+
+        Ok(Self { x, y, z, w })
+    }
+}
+
 #[derive(Default, Debug)]
 pub struct KeyFrame {
     pub frame: u16,
@@ -19,10 +30,45 @@ pub struct KeyFrame {
     pub y: i16,
 }
 
+impl KeyFrame {
+    fn from_bytes(cursor: &mut Cursor<&[u8]>) -> Result<Self> {
+        let frame = cursor.read_u16::<BigEndian>()?;
+        let is_active = cursor.read_u8()? != 0;
+        let _ = cursor.seek_relative(1);
+        let x = cursor.read_i16::<BigEndian>()?;
+        let y = cursor.read_i16::<BigEndian>()?;
+
+        Ok(Self {
+            frame,
+            is_active,
+            x,
+            y,
+        })
+    }
+}
+
 #[derive(Default, Debug)]
 pub struct KeyFrameSet {
     pub node_index: u16,
     pub key_frames: Vec<KeyFrame>,
+}
+
+impl KeyFrameSet {
+    fn from_bytes(cursor: &mut Cursor<&[u8]>) -> Result<Self> {
+        let node_index = cursor.read_u16::<BigEndian>()?;
+        let num_key_frames = cursor.read_u16::<BigEndian>()?;
+
+        let mut key_frames: Vec<KeyFrame> = Vec::with_capacity(num_key_frames as usize);
+
+        for _ in 0..num_key_frames {
+            key_frames.push(KeyFrame::from_bytes(cursor)?);
+        }
+
+        Ok(Self {
+            node_index,
+            key_frames,
+        })
+    }
 }
 
 #[derive(Derivative)]
@@ -62,42 +108,167 @@ pub struct DemoOptionSet {
 pub struct MNEBFile {
     pub curves: Vec<Curve>,
     pub demo_option_sets: Vec<DemoOptionSet>,
-    pub is_animated: bool,
     pub frame_count: u16,
 
     /* unknown fields */
     pub unk_8: u32,
     pub unk_10: u32,
+    pub unk_16: bool,
 }
 
 impl MNEBFile {
-    pub fn has_curves(&self) -> bool {
-        !self.curves.is_empty()
-    }
+    // pub fn has_curves(&self) -> bool {
+    //     !self.curves.is_empty()
+    // }
 
     pub fn from_bytes(raw: &[u8]) -> Result<Self, anyhow::Error> {
-        ensure!(&raw[..4] == b"MNCH", "Invalid file header.");
-
         let mut c = Cursor::new(raw);
-        c.set_position(4);
 
-        let curve_block_offset = c.read_u32::<BigEndian>()? as usize;
-        let header_unk_8 = c.read_u32::<BigEndian>()?;
-        let curve_block_count = c.read_u32::<BigEndian>()?;
-        let header_unk_10 = c.read_u32::<BigEndian>()?;
+        let header_magic = c.read_u32::<BigEndian>()?.to_be_bytes();
+        ensure!(&header_magic == b"MNCH", "Invalid file header.");
+
+        let curve_block_offset = c.read_u32::<BigEndian>()?;
+        let unk_8 = c.read_u32::<BigEndian>()?;
+        let num_curves = c.read_u32::<BigEndian>()?;
+        let unk_10 = c.read_u32::<BigEndian>()?;
         let frame_count = c.read_u16::<BigEndian>()?;
-        let header_unk_16 = c.read_u8()? != 0;
+        let unk_16 = c.read_u8()? != 0;
         let _ = c.seek_relative(1);
 
+        let demo_option_sets: Vec<DemoOptionSet> = Vec::new();
+        let mut curves: Vec<Curve> = Vec::with_capacity(num_curves as usize);
         // check block type
 
-        if curve_block_count == 0 {
+        if num_curves == 0 {
             // demo data
             todo!()
         } else {
-            todo!()
+            c.set_position(curve_block_offset as u64);
+            for _ in 0..num_curves {
+                let start = c.position() as usize;
+                let magic = c.read_u32::<BigEndian>()?.to_be_bytes();
+                ensure!(
+                    &magic == b"MNCN",
+                    format!("Invalid curve header at offset {:X}", c.position() - 4)
+                );
+
+                let block_size = c.read_u32::<BigEndian>()? as usize;
+
+                let offset_to_next = start + block_size;
+
+                let name = {
+                    let pos = c.position() as usize;
+                    let _ = c.seek_relative(0x20);
+
+                    let raw = c.get_ref();
+                    let mut name_vec = raw[pos..pos + 0x20].to_vec();
+                    name_vec.retain(|b| *b != 0);
+
+                    String::from_utf8(name_vec)?
+                };
+
+                let unk_28 = {
+                    let mut temp: [u8; 0x64] = [0u8; 0x64];
+
+                    let pos = c.position() as usize;
+                    let _ = c.seek_relative(0x64);
+
+                    let raw = c.get_ref();
+
+                    temp.copy_from_slice(&raw[pos..pos + 0x64]);
+
+                    temp
+                };
+
+                let unk_8c = c.read_f32::<BigEndian>()?;
+                let unk_90 = c.read_u32::<BigEndian>()?;
+                let unk_94 = c.read_u32::<BigEndian>()?;
+                let unk_98 = c.read_u32::<BigEndian>()?;
+                let control_point_table_offset = c.read_u32::<BigEndian>()?;
+                let knot_table_offset = c.read_u32::<BigEndian>()?;
+                let key_frame_info_offset = c.read_u32::<BigEndian>()?;
+                let unk_a8 = {
+                    let pos = c.position() as usize;
+                    let _ = c.seek_relative(0x10);
+
+                    let raw = c.get_ref();
+                    let float_slice = bytemuck::cast_slice(&raw[pos..pos + 0x10]);
+                    let mut temp = [0f32; 4];
+                    temp.copy_from_slice(float_slice);
+
+                    temp
+                };
+
+                // read control points
+
+                c.set_position(control_point_table_offset as u64);
+                let num_control_points = c.read_u32::<BigEndian>()?;
+                let mut control_points: Vec<ControlPoint> =
+                    Vec::with_capacity(num_control_points as usize);
+
+                for _ in 0..num_control_points {
+                    control_points.push(ControlPoint::from_bytes(&mut c)?);
+                }
+
+                // read knots
+                c.set_position(knot_table_offset as u64);
+                let num_knots = c.read_u32::<BigEndian>()?;
+                let mut knots: Vec<f32> = Vec::with_capacity(num_knots as usize);
+
+                for _ in 0..num_knots {
+                    knots.push(c.read_f32::<BigEndian>()?);
+                }
+
+                // read key frame info
+                c.set_position(key_frame_info_offset as u64);
+                let key_frame_table_offset = c.read_u32::<BigEndian>()?;
+                c.set_position(key_frame_table_offset as u64);
+
+                let num_key_frame_sets = c.read_u32::<BigEndian>()?;
+
+                let mut key_frame_sets: Vec<KeyFrameSet> =
+                    Vec::with_capacity(num_key_frame_sets as usize);
+
+                for _ in 0..num_key_frame_sets {
+                    let cur_offset = c.position();
+
+                    let offset = c.read_u32::<BigEndian>()?;
+                    c.set_position(offset as u64);
+
+                    key_frame_sets.push(KeyFrameSet::from_bytes(&mut c)?);
+
+                    c.set_position(cur_offset + 4);
+                }
+
+                let curve = Curve {
+                    name,
+                    control_points,
+                    knots,
+                    key_frame_sets,
+                    unk_28,
+                    unk_8c,
+                    unk_90,
+                    unk_94,
+                    unk_98,
+                    unk_a8,
+                };
+
+                curves.push(curve);
+
+                // go to next curve block
+                c.set_position(offset_to_next as u64);
+            }
+
+            // todo!()
         }
 
-        Ok(Self::default())
+        Ok(Self {
+            curves,
+            demo_option_sets,
+            frame_count,
+            unk_8,
+            unk_10,
+            unk_16,
+        })
     }
 }

@@ -22,6 +22,6 @@ fn main() -> Result<()> {
 
     let file = fs::read(args.mneb_file)?;
     let mneb_file = mneb::MNEBFile::from_bytes(&file)?;
-    println!("{:?}", mneb_file);
+    println!("{:#?}", mneb_file);
     Ok(())
 }
