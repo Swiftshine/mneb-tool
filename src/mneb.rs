@@ -101,7 +101,7 @@ pub struct DemoOptionSet {
     pub demo_options: Vec<DemoOption>,
 
     /* unknown fields */
-    pub _unk_20: [u8; 0x20],
+    pub unk_20: [u8; 0x20],
 }
 
 #[derive(Default, Debug)]
@@ -127,7 +127,7 @@ impl MNEBFile {
         let header_magic = c.read_u32::<BigEndian>()?.to_be_bytes();
         ensure!(&header_magic == b"MNCH", "Invalid file header.");
 
-        let curve_block_offset = c.read_u32::<BigEndian>()?;
+        let data_offset = c.read_u32::<BigEndian>()?;
         let unk_8 = c.read_u32::<BigEndian>()?;
         let num_curves = c.read_u32::<BigEndian>()?;
         let unk_10 = c.read_u32::<BigEndian>()?;
@@ -135,15 +135,88 @@ impl MNEBFile {
         let unk_16 = c.read_u8()? != 0;
         let _ = c.seek_relative(1);
 
-        let demo_option_sets: Vec<DemoOptionSet> = Vec::new();
+        let mut demo_option_sets: Vec<DemoOptionSet> = Vec::new();
         let mut curves: Vec<Curve> = Vec::with_capacity(num_curves as usize);
         // check block type
 
         if num_curves == 0 {
             // demo data
-            todo!()
+            let magic = c.read_u32::<BigEndian>()?.to_be_bytes();
+            ensure!(
+                &magic == b"MNDD",
+                format!("Invalid demo data header at offset {:X}", c.position() - 4)
+            );
+            let _ = c.read_u32::<BigEndian>()?; // block size, but not relevant
+            let num_demo_option_sets = c.read_u32::<BigEndian>()?;
+
+            for _ in 0..num_demo_option_sets {
+                let cur_pos = c.position();
+
+                // read demo option set
+                let offset = c.read_u32::<BigEndian>()?;
+                c.set_position(offset as u64);
+
+                let name = {
+                    let pos = c.position() as usize;
+                    let _ = c.seek_relative(0x20);
+
+                    let raw = c.get_ref();
+                    let mut name_vec = raw[pos..pos + 0x20].to_vec();
+                    name_vec.retain(|b| *b != 0);
+                    String::from_utf8(name_vec)?
+                };
+
+                let unk_20 = {
+                    let mut temp = [0u8; 0x20];
+                    let pos = c.position() as usize;
+                    let _ = c.seek_relative(0x20);
+
+                    let raw = c.get_ref();
+                    let v = raw[pos..pos + 0x20].to_vec();
+                    temp.copy_from_slice(&v);
+
+                    temp
+                };
+
+                let option_count = c.read_u32::<BigEndian>()?;
+
+                let mut demo_options: Vec<DemoOption> = Vec::with_capacity(option_count as usize);
+                for _ in 0..option_count {
+                    let cur_pos = c.position();
+
+                    let offset = c.read_u32::<BigEndian>()?;
+                    c.set_position(offset as u64);
+
+                    // read demo options
+                    let name = {
+                        let pos = c.position() as usize;
+                        let _ = c.seek_relative(0x10);
+
+                        let raw = c.get_ref();
+                        let mut name_vec = raw[pos..pos + 0x10].to_vec();
+                        name_vec.retain(|b| *b != 0);
+                        String::from_utf8(name_vec)?
+                    };
+
+                    let num_values = c.read_u32::<BigEndian>()?;
+                    let mut values: Vec<u8> = Vec::with_capacity(num_values as usize);
+                    let pos = c.position() as usize;
+                    let raw = c.get_ref();
+                    values.extend_from_slice(&raw[pos..pos + num_values as usize]);
+
+                    demo_options.push(DemoOption { name, values });
+                    c.set_position(cur_pos + 4);
+                }
+
+                demo_option_sets.push(DemoOptionSet {
+                    name,
+                    demo_options,
+                    unk_20,
+                });
+                c.set_position(cur_pos + 4);
+            }
         } else {
-            c.set_position(curve_block_offset as u64);
+            c.set_position(data_offset as u64);
             for _ in 0..num_curves {
                 let start = c.position() as usize;
                 let magic = c.read_u32::<BigEndian>()?.to_be_bytes();

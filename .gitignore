@@ -2,3 +2,4 @@
 scratch/
 *.mneb
 *.json
+.DS_Store
