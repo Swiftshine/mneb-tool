@@ -46,16 +46,14 @@ fn main() -> Result<()> {
                 for entry in glob(filename).expect("Failed to read glob pattern.") {
                     match entry {
                         Ok(path) => {
-                            if let Ok(bytes) = fs::read(&path) {
-                                if let Ok(mneb_file) = mneb::MNEBFile::from_bytes(&bytes) {
-                                    if mneb_file.has_curves() {
+                            if let Ok(bytes) = fs::read(&path)
+                                && let Ok(mneb_file) = mneb::MNEBFile::from_bytes(&bytes)
+                                    && mneb_file.has_curves() {
                                         let name =
                                             format!("{}", path.file_name().unwrap().display());
 
                                         mneb_files.push((name, mneb_file));
                                     }
-                                }
-                            }
                         }
 
                         Err(e) => {

@@ -214,11 +214,10 @@ fn animate_curves(curves: &[Curve], zoom: f32, current_frame: f32) {
 
         for key_set in &curve.key_frame_sets {
             let idx = key_set.node_index as usize;
-            if idx < current_positions.len() {
-                if let Some((nx, ny)) = interpolate(&key_set.key_frames, current_frame) {
+            if idx < current_positions.len()
+                && let Some((nx, ny)) = interpolate(&key_set.key_frames, current_frame) {
                     current_positions[idx] = vec2(nx, ny);
                 }
-            }
         }
 
         // draw lines
