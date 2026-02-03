@@ -2,7 +2,8 @@ mod animate;
 mod mneb;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use std::fs;
+use glob::glob;
+use std::{fs, path::Path};
 
 #[derive(Subcommand, Debug)]
 enum Usage {
@@ -37,13 +38,51 @@ fn main() -> Result<()> {
             framerate,
             filename,
         } => {
-            let file = fs::read(filename)?;
-            let mneb_file = mneb::MNEBFile::from_bytes(&file)?;
-            if mneb_file.has_curves() {
-                animate::play_animation(mneb_file, *framerate);
+            if filename.contains('*') && filename.contains(".mneb")
+            // to be entirely sure we're only rendering mneb files
+            {
+                // go through multiple files
+                let mut mneb_files = Vec::new();
+                for entry in glob(filename).expect("Failed to read glob pattern.") {
+                    match entry {
+                        Ok(path) => {
+                            if let Ok(bytes) = fs::read(&path) {
+                                if let Ok(mneb_file) = mneb::MNEBFile::from_bytes(&bytes) {
+                                    if mneb_file.has_curves() {
+                                        let name =
+                                            format!("{}", path.file_name().unwrap().display());
+
+                                        mneb_files.push((name, mneb_file));
+                                    }
+                                }
+                            }
+                        }
+
+                        Err(e) => {
+                            println!("Error matching glob pattern: {:?}", e);
+                        }
+                    }
+                }
+
+                if !mneb_files.is_empty() {
+                    // sort alphabetically before playing
+                    mneb_files.sort_by(|a, b| a.0.cmp(&b.0));
+                    animate::animate_files(mneb_files, *framerate);
+                } else {
+                    println!("No valid MNEB files found matching pattern: {}", filename);
+                }
             } else {
-                // nothing to do
-                println!("File does not have curves to render.");
+                // play just the one
+                let file = fs::read(filename)?;
+                let mneb_file = mneb::MNEBFile::from_bytes(&file)?;
+                if mneb_file.has_curves() {
+                    let filename =
+                        format!("{}", Path::new(filename).file_name().unwrap().display());
+                    animate::animate_file(mneb_file, *framerate, filename);
+                } else {
+                    // nothing to do
+                    println!("File does not have curves to render.");
+                }
             }
         }
 
