@@ -15,7 +15,7 @@ mneb-tool animate my_file.mneb -f 30.0
 mneb-tool animate my_file.mneb --framerate 30.0
 ```
 
-You can also animate multiple files with a wildcard (`*`). You must also specify that the format is `.mneb`.
+You can also animate multiple files with a wildcard (`*`). You must also specify that the extension is `.mneb`.
 
 **Correct**
 ```
