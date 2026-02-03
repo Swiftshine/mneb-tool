@@ -48,12 +48,12 @@ fn main() -> Result<()> {
                         Ok(path) => {
                             if let Ok(bytes) = fs::read(&path)
                                 && let Ok(mneb_file) = mneb::MNEBFile::from_bytes(&bytes)
-                                    && mneb_file.has_curves() {
-                                        let name =
-                                            format!("{}", path.file_name().unwrap().display());
+                                && mneb_file.has_curves()
+                            {
+                                let name = format!("{}", path.file_name().unwrap().display());
 
-                                        mneb_files.push((name, mneb_file));
-                                    }
+                                mneb_files.push((name, mneb_file));
+                            }
                         }
 
                         Err(e) => {
