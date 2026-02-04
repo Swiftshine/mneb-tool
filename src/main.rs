@@ -14,8 +14,12 @@ enum Usage {
     },
     Convert {
         filename: String,
+        /// The name of the JSON value to output.
         #[arg(default_value_t = String::from("out.json"))]
         output_json: String,
+        #[arg(short, long, default_value_t = String::from("out"))]
+        /// If processing multiple files, the folder to output the files to.
+        output_folder_name: String,
         /// Make the JSON output pretty.
         #[arg(short, long)]
         pretty: bool,
@@ -87,16 +91,51 @@ fn main() -> Result<()> {
         Usage::Convert {
             output_json,
             filename,
+            output_folder_name,
             pretty,
         } => {
-            let file = fs::read(filename)?;
-            let mneb_file = mneb::MNEBFile::from_bytes(&file)?;
-            let json = if *pretty {
-                serde_json::to_string_pretty(&mneb_file)?
+            if filename.contains('*') && filename.contains(".mneb") {
+                let mut mneb_files = Vec::new();
+                for entry in glob(filename).expect("Failed to read glob pattern.") {
+                    match entry {
+                        Ok(path) => {
+                            if let Ok(bytes) = fs::read(&path)
+                                && let Ok(mneb_file) = mneb::MNEBFile::from_bytes(&bytes)
+                            {
+                                let name = format!("{}", path.file_name().unwrap().display());
+
+                                mneb_files.push((name, mneb_file));
+                            }
+                        }
+
+                        Err(e) => {
+                            println!("Error matching glob pattern: {:?}", e);
+                        }
+                    }
+                }
+
+                for (name, mneb_file) in mneb_files {
+                    let json = if *pretty {
+                        serde_json::to_string_pretty(&mneb_file)?
+                    } else {
+                        serde_json::to_string(&mneb_file)?
+                    };
+
+                    if !fs::exists(output_folder_name)? {
+                        fs::create_dir(output_folder_name)?;
+                    }
+                    fs::write(format!("{}/{}.json", output_folder_name, name), json)?;
+                }
             } else {
-                serde_json::to_string(&mneb_file)?
-            };
-            fs::write(output_json, json)?;
+                let file = fs::read(filename)?;
+                let mneb_file = mneb::MNEBFile::from_bytes(&file)?;
+                let json = if *pretty {
+                    serde_json::to_string_pretty(&mneb_file)?
+                } else {
+                    serde_json::to_string(&mneb_file)?
+                };
+                fs::write(output_json, json)?;
+            }
         }
     }
 
