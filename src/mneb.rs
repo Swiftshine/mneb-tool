@@ -128,12 +128,12 @@ pub struct DemoOptionSet {
 pub struct MNEBFile {
     pub curves: Vec<Curve>,
     pub demo_option_sets: Vec<DemoOptionSet>,
+    pub lock: u32,
     pub frame_count: u16,
     pub is_looped: bool,
 
     /* unknown fields */
     pub _unk_8: u32,
-    pub _unk_10: u32,
 }
 
 impl MNEBFile {
@@ -150,7 +150,7 @@ impl MNEBFile {
         let data_offset = c.read_u32::<BigEndian>()?;
         let unk_8 = c.read_u32::<BigEndian>()?;
         let num_curves = c.read_u32::<BigEndian>()?;
-        let unk_10 = c.read_u32::<BigEndian>()?;
+        let lock = c.read_u32::<BigEndian>()?;
         let frame_count = c.read_u16::<BigEndian>()?;
         let is_looped = c.read_u8()? != 0;
         let _ = c.seek_relative(1);
@@ -367,7 +367,7 @@ impl MNEBFile {
             demo_option_sets,
             frame_count,
             _unk_8: unk_8,
-            _unk_10: unk_10,
+            lock,
             is_looped,
         })
     }
