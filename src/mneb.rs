@@ -8,7 +8,7 @@ pub struct ControlPoint {
     pub x: i16,
     pub y: i16,
     pub z: i16,
-    pub w: i16,
+    pub texture_index: u16,
 }
 
 impl ControlPoint {
@@ -16,9 +16,14 @@ impl ControlPoint {
         let x = cursor.read_i16::<BigEndian>()?;
         let y = cursor.read_i16::<BigEndian>()?;
         let z = cursor.read_i16::<BigEndian>()?;
-        let w = cursor.read_i16::<BigEndian>()?;
+        let texture_index = cursor.read_u16::<BigEndian>()?;
 
-        Ok(Self { x, y, z, w })
+        Ok(Self {
+            x,
+            y,
+            z,
+            texture_index,
+        })
     }
 }
 
